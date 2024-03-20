@@ -1,10 +1,19 @@
-import React from 'react'
+import React, { useState } from 'react'
 import '../Components/PokedexComponent.css'
 import favhrt from "./Assets/Vector.png"
+import bulb from "./Assets/1 2.png"
+
 
 
 
 const PokedexComponent = () => {
+
+const [userInput, setUserInput] = useState<string>("Bulbasaur");
+const [Img, setImg] = useState<string>("favhrt");
+
+
+
+
   return (
     <div className=' h-[100vh] bg-slate-600 m-3 md:m-8 flex justify-center'>
       <div className='mb-3'>
@@ -22,11 +31,11 @@ const PokedexComponent = () => {
 
 
         <div className="flex justify-center">
-          <div>
+          <div className='flex'>
 
 
             <div className=""><p id="pokeName" className="text-4xl md:text-5xl mt-5">Bulbasaur</p></div>
-            <div className="favEmpt "><img id="favBtn" className="h-[25px] md:h-[33px] flex ml-5" src={favhrt} alt="favorite pokemon btn" /></div>
+            <div className="favEmpt "><img id="favBtn" className="h-[25px] md:h-[33px] flex ml-5" src={Img} alt="favorite pokemon btn" /></div>
             
           </div>
         </div>
@@ -39,7 +48,7 @@ const PokedexComponent = () => {
         </div>
 
         <div className="flex justify-center">
-          <img className="w-[475px]" id="pokeImg" src="" alt="A pokemon" />
+          <img className="w-[475px]" id="pokeImg" src={bulb} alt="A pokemon" />
         </div>
 
         <div className="max-w-[600px] px-5">
