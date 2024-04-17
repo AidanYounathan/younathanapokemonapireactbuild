@@ -261,7 +261,7 @@ export interface Pokemon {
    
 
 
-   export interface Location {
+   export interface Location1 {
     location_area:   LocationArea;
     version_details: VersionDetail[];
    }

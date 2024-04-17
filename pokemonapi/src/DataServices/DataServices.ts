@@ -1,4 +1,4 @@
-import { Evolution, Pokemon, Location} from "./Interfaces/Interfaces";
+import { Evolution, Pokemon, Location1} from "./Interfaces/Interfaces";
 
 export const pokeData = async (input: string) =>{
     const promise = await fetch(`https://pokeapi.co/api/v2/pokemon/${input.toLowerCase()}`);
@@ -21,7 +21,7 @@ export const pokeDataEvo = async (input: string) =>{
 
 export const getAPI = async (input: string) =>{
     const promise = await fetch(`${input}`)
-    const data : Location = await promise.json()
+    const data : Location1 = await promise.json()
     console.log(data);
     return data;
 }
