@@ -10,7 +10,13 @@ import {
   Pokemon,
   RegEvolution,
 } from "../DataServices/Interfaces/Interfaces";
-import { PokemonEvolutionId, PokemonEvolutionImageName, getAPI, pokeData, pokeDataEvo } from "../DataServices/DataServices";
+import {
+  PokemonEvolutionId,
+  PokemonEvolutionImageName,
+  getAPI,
+  pokeData,
+  pokeDataEvo,
+} from "../DataServices/DataServices";
 
 const PokedexComponent = () => {
   const [userInput, setUserInput] = useState<string>("Bulbasaur");
@@ -19,6 +25,7 @@ const PokedexComponent = () => {
   const [location, setLocation] = useState<Location1>();
   const [evoData, setEvoData] = useState<Evolution>();
   const [imgSrc, setImgSrc] = useState<string>("");
+  const [pokeNum, setPokeNum] = useState<string>("")
   const [pokemonEvolution, setPokemonEvolution] = useState<RegEvolution | null>(
     null
   );
@@ -37,8 +44,8 @@ const PokedexComponent = () => {
       const locData: Location1 = locationData;
       const evolutionData = await pokeDataEvo(userInput);
       const evoData: Evolution = evolutionData;
-      console.log(evoData.evolution_chain.url);
       const evoTypeData = await getAPI(evoData.evolution_chain.url);
+      
       const evoType:
         | {
           evolution_chain: {
@@ -55,7 +62,7 @@ const PokedexComponent = () => {
       setEvoData(evoData);
       setLocation(locData);
       setPokemon(data);
-
+      setPokeNum(pokemon && pokemon.id ? `#${pokemon.id}` : "Loading")
       const favorites = getLocalStorage();
       const isFavorite = favorites.some(
         (favPokemon: Pokemon) =>
@@ -106,7 +113,6 @@ const PokedexComponent = () => {
     setEvolutionData(dataEvo);
   }, [pokemonEvoData]);
 
-
   useEffect(() => {
     fetchEvolutionData();
   }, [fetchEvolutionData]);
@@ -115,7 +121,7 @@ const PokedexComponent = () => {
     const favoritesData = getLocalStorage();
     setFavorites(favoritesData);
     console.log(evolutionDatas);
-  }, [])
+  }, []);
 
   const CapitalFirstLetter = (userInput: string) => {
     if (!userInput) return "";
@@ -141,7 +147,9 @@ const PokedexComponent = () => {
     let favorites = getLocalStorage();
     if (pokemon) {
       const pokemonName = pokemon.name;
-      const namedIndex = favorites.findIndex((favPokemon: Pokemon) => favPokemon.name === pokemonName);
+      const namedIndex = favorites.findIndex(
+        (favPokemon: Pokemon) => favPokemon.name === pokemonName
+      );
       if (namedIndex !== -1) {
         favorites.splice(namedIndex, 1);
         localStorage.setItem("Favorites", JSON.stringify(favorites));
@@ -150,41 +158,57 @@ const PokedexComponent = () => {
   };
 
 
+  const pokemonName = pokemon?.name;
+  const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemonName);
+
 
   const handleFavoriteClick = () => {
-    const pokemonName = pokemon?.name;
     if (pokemonName) {
       const favorites = getLocalStorage();
-      const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemonName);
       if (isAlreadyFavorite) {
         setFavorite(unfavhrt);
         removeFromLS(pokemon);
       } else {
-        setFavorite(favhrt)
+        setFavorite(favhrt);
         saveToLS(pokemon);
       }
     }
   };
+
+  const [favClassName, setFavClassName] = useState<string>("-translate-x-full");
+  const handleFavDrawerClick = () => {
+    if (favClassName !== "-translate-x-full") {
+      setFavClassName("-translate-x-full");
+    } else {
+      setFavClassName("");
+    }
+  }
+  
 
   const genRandomNumber = async () => {
     const randomId: string = String(Math.floor(Math.random() * 898) + 1);
     const getName: Pokemon = await pokeData(randomId);
     setUserInput(getName.name);
     setImgSrc("");
-};
+  };
 
-const handleShinyClick = () => {
-  const shinyPic = pokemon?.sprites.other?.['official-artwork'].front_shiny;
-  const defaultPic = pokemon?.sprites.other?.['official-artwork'].front_default;
+  const handleShinyClick = () => {
+    const shinyPic = pokemon?.sprites.other?.["official-artwork"].front_shiny;
+    const defaultPic =
+      pokemon?.sprites.other?.["official-artwork"].front_default;
 
-  if (shinyPic && imgSrc !== shinyPic) {
+    if (shinyPic && imgSrc !== shinyPic) {
       setImgSrc(shinyPic);
-  } else if (defaultPic && imgSrc !== defaultPic) {
+    } else if (defaultPic && imgSrc !== defaultPic) {
       setImgSrc(defaultPic);
+    }
+  };
+
+
+
+  const checkIfFav = () =>{
+
   }
-};
-
-
 
   return (
     <div className="  bg-slate-600 m-3 md:m-8 flex justify-center">
@@ -218,6 +242,7 @@ const handleShinyClick = () => {
             id="btn2"
             type="button"
             className="text-white bg-gradient-to-r md:text-3xl from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 shadow-lg shadow-blue-500/50 dark:shadow-lg dark:shadow-blue-800/80 font-medium rounded-lg  px-5 py-2.5 text-center me-5 md:me-11 mb-2 "
+            onClick={handleFavDrawerClick}
           >
             Favorites
           </button>
@@ -225,6 +250,8 @@ const handleShinyClick = () => {
             id="btn"
             type="button"
             className="text-white bg-gradient-to-r md:text-3xl  from-red-500 via-red-600 to-red-700 hover:bg-gradient-to-br focus:ring-1 focus:outline-none focus:ring-red-300 dark:focus:ring-red-800 shadow-lg shadow-red-500/50 dark:shadow-lg dark:shadow-red-800/80 font-medium rounded-lg  px-5 py-2.5 text-center me-2 mb-2"
+            onClick={genRandomNumber}
+
           >
             Random
           </button>
@@ -251,13 +278,22 @@ const handleShinyClick = () => {
         </div>
         <div>
           <p className="text-center text-4xl mt-4" id="pokeNum">
-            {pokemon && pokemon.id ? `#${pokemon.id}` : "Loading"}
+            {pokemon && pokemon.id ? `#${pokemon.id.toString().padStart(3, '0')}` : "Loading"}
           </p>
         </div>
         <div id="pokeTypes" className="flex  mt-9 justify-evenly"></div>
 
         <div className="flex justify-center">
-          <img className="w-[475px]" id="pokeImg" src={imgSrc || pokemon?.sprites.other?.['official-artwork'].front_default} onClick={handleShinyClick} alt="A pokemon" />
+          <img
+            className="w-[475px]"
+            id="pokeImg"
+            src={
+              imgSrc ||
+              pokemon?.sprites.other?.["official-artwork"].front_default
+            }
+            onClick={handleShinyClick}
+            alt="A pokemon"
+          />
         </div>
 
         <div className="max-w-[600px] px-5">
@@ -277,7 +313,7 @@ const handleShinyClick = () => {
             ))}
           </div>
           <hr className="breakers" />
-          <div className="flex text-white outlined2 text-3xl md:text-5xl mb-5 ">
+          <div className="flex text-white outlined2 text-3xl md:text-5xl mb-5 mt-4 ">
             <p className="mr-5">Location:</p>
             <p className=" overflow-scroll max-h-[100px]">
               {location && Array.isArray(location) && location.length > 0
@@ -300,8 +336,8 @@ const handleShinyClick = () => {
           <hr className="breakers" />
           <div className="flex text-white outlined2 text-3xl md:text-5xl my-4">
             <p className="mr-5">Abilities:</p>
-            <p >
-              {" "}
+            <p>
+
               {pokemon?.abilities.map(
                 (ability: { ability: { name: string } }, index: number) => (
                   <span key={index}>
@@ -311,15 +347,50 @@ const handleShinyClick = () => {
                 )
               )}
             </p>
-            
           </div>
           <hr className="breakers" />
           <div className="flex text-white outlined2 text-3xl md:text-5xl mt-4 ">
             <p className="mr-5">Moves:</p>
-            <p id="moves" className="overflow-scroll max-h-[187px]"></p>
+            <p className="overflow-scroll max-h-[187px]">
+              {pokemon?.moves.map(
+                (move: { move: { name: string } }, index: number) => (
+                  <span key={index}>
+                    {CapitalFirstLetter(`${move.move.name}`)}
+                    {index !== pokemon.moves.length - 1 && ", "}
+                  </span>
+                )
+              )}
+            </p>
           </div>
         </div>
       </div>
+
+      <div id="drawer-navigation" className={`fixed top-0 bg-[#D9D9D9] left-0 z-40 w-full lg:w-[420px] h-screen p-4 overflow-y-auto transition-transform dark:bg-gray-800 ${favClassName}`}>
+        <p id="drawer-navigation-label" className=" text-[2.8rem] ">Favorites</p>
+        <button onClick={handleFavDrawerClick} type="button" className=" bg-transparent  hover:text-gray-500 absolute top-6 end-2.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white">
+          <svg aria-hidden="true" className="w-[50px] h-[50px] grid" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path></svg>
+        </button>
+        <div className="py-4 overflow-y-auto ">
+          <div id="getFavoritesDiv">
+            {favorites.map((pokemonName: Pokemon, index: number) => (
+              <div key={index} className="flex justify-between flex-row">
+                <p className=" text-black bg-white w-full rounded-l-lg px-2 cursor-pointer" onClick={() => setUserInput(pokemonName.name)}>
+                  <span>{`#${pokemonName.id} ${CapitalFirstLetter(pokemonName.name)}`}</span>
+                </p>
+                <button className="  hover:text-gray-500 px-5 h-full"  >
+                  {"X"}
+                </button>
+              </div>
+            ))}
+
+
+          </div>
+        </div>
+
+
+      </div>
+
+
     </div>
   );
 };
