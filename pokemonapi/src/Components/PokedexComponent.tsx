@@ -93,6 +93,7 @@ const PokedexComponent = () => {
     console.log(favorites);
     console.log(location);
     getData();
+    
   }, [userInput, favorite]);
 
   const getLocalStorage = () => {
@@ -122,6 +123,21 @@ const PokedexComponent = () => {
     setFavorites(favoritesData);
     console.log(evolutionDatas);
   }, []);
+
+
+  useEffect(() => {
+    const checkIfFavorite = () => {
+      const currentFavorites = getLocalStorage(); // Fetch current favorites from local storage
+      const isFavorited = currentFavorites.some((fav : Pokemon) => fav.name === pokemon?.name);
+      setFavorite(isFavorited ? favhrt : unfavhrt);
+    };
+  
+    if (pokemon) {
+      checkIfFavorite();
+    }
+  }, [pokemon , favorites]);
+  
+
 
   const CapitalFirstLetter = (userInput: string) => {
     if (!userInput) return "";
@@ -158,22 +174,95 @@ const PokedexComponent = () => {
   };
 
 
-  const pokemonName = pokemon?.name;
-  const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemonName);
+  // const pokemonName = pokemon?.name;
+  // const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemonName);
 
 
-  const handleFavoriteClick = () => {
-    if (pokemonName) {
-      const favorites = getLocalStorage();
-      if (isAlreadyFavorite) {
-        setFavorite(unfavhrt);
-        removeFromLS(pokemon);
-      } else {
-        setFavorite(favhrt);
-        saveToLS(pokemon);
-      }
+//   const handleFavoriteClick = () => {
+//     const pokemonName = pokemon?.name;
+//     if (pokemonName) {
+//         const favorites = getLocalStorage();
+//         const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemonName);
+//         if (isAlreadyFavorite) {
+            
+//             setFavorite(unfavhrt);
+//             removeFromLS(pokemon);
+//         } else {
+//             setFavorite(favhrt)
+//             saveToLS(pokemon);
+//         }
+//     }
+// };
+
+// const handleRemoveFavorite = (pokemonToRemove: Pokemon) => {
+//   const favorites = getLocalStorage();
+//   const updatedFavorites = favorites.filter((favPokemon : Pokemon) => favPokemon.name !== pokemonToRemove.name);
+//   localStorage.setItem("Favorites", JSON.stringify(updatedFavorites));
+//   setFavorites(updatedFavorites);
+//   // Update the favorite icon if the currently viewed Pokémon is removed
+//   if (pokemon?.name === pokemonToRemove.name) {
+//     setFavorite(unfavhrt);
+//   }
+// };
+
+
+
+const addFavorite = (pokemon: Pokemon) => {
+  const favorites = getLocalStorage();
+  if (!favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemon.name)) {
+    const updatedFavorites = [...favorites, pokemon];
+    localStorage.setItem("Favorites", JSON.stringify(updatedFavorites));
+    setFavorites(updatedFavorites);
+  }
+};
+
+// const handleFavoriteClick = (pokemon: Pokemon) => {
+//   const favorites = getLocalStorage();
+//   const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemon.name);
+
+//   if (isAlreadyFavorite) {
+//     removeFavorite(pokemon);
+//     setFavorite(unfavhrt); // Assuming you're toggling the icon in UI
+//   } else {
+//     addFavorite(pokemon);
+//     setFavorite(favhrt); // Toggling the icon to show it's a favorite
+//   }
+// };
+
+const handleFavoriteClick = () => {
+  if (pokemon) {  // This checks if there is a currently selected pokemon
+    const favorites = getLocalStorage();
+    const isAlreadyFavorite = favorites.some((favPokemon: Pokemon) => favPokemon.name === pokemon.name);
+
+    if (isAlreadyFavorite) {
+      removeFavorite(pokemon);
+      setFavorite(unfavhrt); // Assuming you're toggling the icon in UI
+    } else {
+      addFavorite(pokemon);
+      setFavorite(favhrt); // Toggling the icon to show it's a favorite
     }
-  };
+  }
+};
+
+const removeFavorite = (pokemon: Pokemon) => {
+  const favorites = getLocalStorage();
+  const updatedFavorites = favorites.filter((favPokemon: Pokemon) => favPokemon.name!== pokemon.name);
+  localStorage.setItem("Favorites", JSON.stringify(updatedFavorites));
+  setFavorites(updatedFavorites);
+};
+
+  // const handleFavoriteClick = () => {
+  //   if (pokemonName) {
+  //     const favorites = getLocalStorage();
+  //     if (isAlreadyFavorite) {
+  //       setFavorite(unfavhrt);
+  //       removeFromLS(pokemon);
+  //     } else {
+  //       setFavorite(favhrt);
+  //       saveToLS(pokemon);
+  //     }
+  //   }
+  // };
 
   const [favClassName, setFavClassName] = useState<string>("-translate-x-full");
   const handleFavDrawerClick = () => {
@@ -205,10 +294,6 @@ const PokedexComponent = () => {
   };
 
 
-
-  const checkIfFav = () =>{
-
-  }
 
   return (
     <div className="  bg-slate-600 m-3 md:m-8 flex justify-center">
@@ -268,7 +353,7 @@ const PokedexComponent = () => {
             </div>
             <div className="favEmpt ">
               <img
-                onClick={handleFavoriteClick}
+                onClick={() => handleFavoriteClick()}
                 className="h-[25px] md:h-[33px] flex ml-5 cursor-pointer"
                 src={favorite}
                 alt="favorite pokemon btn"
@@ -374,10 +459,10 @@ const PokedexComponent = () => {
           <div id="getFavoritesDiv">
             {favorites.map((pokemonName: Pokemon, index: number) => (
               <div key={index} className="flex justify-between flex-row">
-                <p className=" text-black bg-white w-full rounded-l-lg px-2 cursor-pointer" onClick={() => setUserInput(pokemonName.name)}>
-                  <span>{`#${pokemonName.id} ${CapitalFirstLetter(pokemonName.name)}`}</span>
+                <p className=" text-black  text-[32px] w-full rounded-l-lg px-2 cursor-pointer" onClick={() => setUserInput(pokemonName.name)}>
+                  <span>{`${CapitalFirstLetter(pokemonName.name)}`}</span>
                 </p>
-                <button className="  hover:text-gray-500 px-5 h-full"  >
+                <button className=" text-[32px]  hover:text-gray-500 px-5 h-full" onClick={handleFavoriteClick}  >
                   {"X"}
                 </button>
               </div>
