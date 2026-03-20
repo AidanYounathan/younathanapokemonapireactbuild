@@ -1,15 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
-import "../Components/PokedexComponent.css";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./PokedexComponent.css";
 import unfavhrt from "./Assets/Vector.png";
 import favhrt from "./Assets/favorited.png";
-import bulb from "./Assets/1 2.png";
 import {
   Evolution,
   Location1,
-  Location2,
   Pokemon,
   RegEvolution,
-  Type,
 } from "../DataServices/Interfaces/Interfaces";
 import {
   PokemonEvolutionId,
@@ -19,434 +16,424 @@ import {
   pokeDataEvo,
 } from "../DataServices/DataServices";
 
-const PokedexComponent = () => {
-  const [userInput, setUserInput] = useState<string>("Bulbasaur");
+/* ── Helpers (pure, outside component) ── */
 
+const capitalize = (str: string): string => {
+  if (!str) return "";
+  return str
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
+const readFavorites = (): string[] => {
+  try {
+    const raw = localStorage.getItem("Favorites");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeFavorites = (favs: string[]) => {
+  localStorage.setItem("Favorites", JSON.stringify(favs));
+};
+
+const STAT_LABELS: Record<string, string> = {
+  hp: "HP",
+  attack: "ATK",
+  defense: "DEF",
+  "special-attack": "SPA",
+  "special-defense": "SPD",
+  speed: "SPE",
+};
+
+const STAT_COLORS: Record<string, string> = {
+  hp: "#ef4444",
+  attack: "#f97316",
+  defense: "#eab308",
+  "special-attack": "#6366f1",
+  "special-defense": "#22c55e",
+  speed: "#ec4899",
+};
+
+/* ── Component ── */
+
+const PokedexComponent: React.FC = () => {
+  const [userInput, setUserInput] = useState("Bulbasaur");
   const [pokemon, setPokemon] = useState<Pokemon | null>(null);
   const [location, setLocation] = useState<Location1>();
-  const [evoData, setEvoData] = useState<Evolution>();
-  const [imgSrc, setImgSrc] = useState<string>("");
-  const [pokeNum, setPokeNum] = useState<string>("")
-  const [pokemonEvolution, setPokemonEvolution] = useState<RegEvolution | null>(
-    null
-  );
+  const [imgSrc, setImgSrc] = useState("");
   const [pokemonEvoData, setPokeEvoData] = useState<string[]>([]);
   const [evolutionDatas, setEvolutionData] = useState<
     { evolutionImage: string; evolutionId: string }[]
   >([]);
-  const [favorite, setFavorite] = useState<string>(unfavhrt);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [types, setTypes] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>(readFavorites);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Ref to avoid stale closure in search handler
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Fetch pokemon data ── */
   useEffect(() => {
-    const getData = async () => {
-      const pokemonData = await pokeData(userInput);
-      const data: Pokemon = pokemonData;
-      const locationData = await getAPI(data.location_area_encounters);
-      const locData: Location1 = locationData;
-      const evolutionData = await pokeDataEvo(userInput);
-      const evoData: Evolution = evolutionData;
-      const evoTypeData = await getAPI(evoData.evolution_chain.url);
+    let cancelled = false;
 
-      const evoType:
-        | {
-          evolution_chain: {
-            chain: {
-              species: { name: string };
-              evolves_to: { species: { name: string }[] }[];
-            };
-          };
-        }
-        | any
-        | RegEvolution = evoTypeData;
-      console.log(evoType);
-      setPokemonEvolution(evoType);
-      setEvoData(evoData);
-      setLocation(locData);
-      setPokemon(data);
-      setPokeNum(pokemon && pokemon.id ? `#${pokemon.id}` : "Loading")
-      const favorites = getLocalStorage();
-      if (favorites.includes(pokemonData.name)) {
-        console.log('im here')
-      } else {
-        console.log('nah')
-      }
+    const fetchData = async () => {
+      setLoading(true);
+      setImgSrc("");
 
-      const pokemonEvolutionChain: string[] = [];
-      if (evoType && evoType.chain) {
-        pokemonEvolutionChain.push(evoType.chain.species.name);
-        evoType.chain.evolves_to.forEach(
-          (e: { species: { name: string }; evolves_to: string[] }) => {
-            e.species && pokemonEvolutionChain.push(e.species.name);
-            e.evolves_to.forEach((e: any) => {
-              e.species && pokemonEvolutionChain.push(e.species.name);
-            });
-          }
+      try {
+        const pokemonData = await pokeData(userInput);
+        if (cancelled) return;
+
+        const [locationData, evolutionData] = await Promise.all([
+          getAPI(pokemonData.location_area_encounters),
+          pokeDataEvo(userInput),
+        ]);
+        if (cancelled) return;
+
+        const evoTypeData = await getAPI(
+          (evolutionData as Evolution).evolution_chain.url
         );
+        if (cancelled) return;
+
+        const evoType: RegEvolution | any = evoTypeData;
+
+        // Parse evolution chain
+        const chain: string[] = [];
+        if (evoType?.chain) {
+          chain.push(evoType.chain.species.name);
+          evoType.chain.evolves_to.forEach(
+            (e: { species: { name: string }; evolves_to: any[] }) => {
+              if (e.species) chain.push(e.species.name);
+              e.evolves_to?.forEach((e2: any) => {
+                if (e2.species) chain.push(e2.species.name);
+              });
+            }
+          );
+        }
+
+        setPokemon(pokemonData);
+        setLocation(locationData);
+        setPokeEvoData(chain);
+      } catch (err) {
+        // silently fail for bad input
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setPokeEvoData(pokemonEvolutionChain);
-      console.log(pokemonEvolutionChain);
     };
-    const favoritesData = getLocalStorage();
-    setFavorites(favoritesData);
-    console.log(favorites);
-    console.log(location);
-    getData();
 
-  }, [userInput, favorite]);
+    fetchData();
+    return () => { cancelled = true; };
+  }, [userInput]);
 
-  const getLocalStorage = () => {
-    let localStorageData = localStorage.getItem("Favorites");
-    console.log(localStorageData)
-    if (localStorageData == null) {
-      return [];
-    }
-    return JSON.parse(localStorageData);
-  };
-
+  /* ── Fetch evolution images once chain names change ── */
   const fetchEvolutionData = useCallback(async () => {
-    const promise = pokemonEvoData.map(async (evolutionName: string) => {
-      const evolutionImage = await PokemonEvolutionImageName(evolutionName);
-      const evolutionId = await PokemonEvolutionId(evolutionName);
-      return { evolutionImage, evolutionId: String(evolutionId) };
-    });
-    const dataEvo = await Promise.all(promise);
-    setEvolutionData(dataEvo);
+    if (pokemonEvoData.length === 0) return;
+
+    const results = await Promise.all(
+      pokemonEvoData.map(async (name) => {
+        const [evolutionImage, evolutionId] = await Promise.all([
+          PokemonEvolutionImageName(name),
+          PokemonEvolutionId(name),
+        ]);
+        return { evolutionImage, evolutionId: String(evolutionId) };
+      })
+    );
+    setEvolutionData(results);
   }, [pokemonEvoData]);
 
   useEffect(() => {
     fetchEvolutionData();
   }, [fetchEvolutionData]);
 
-  useEffect(() => {
-    const favoritesData = getLocalStorage();
-    setFavorites(favoritesData);
-    console.log(evolutionDatas);
+  /* ── Favorite logic ── */
+  const isFavorite = useMemo(
+    () => (pokemon ? favorites.includes(pokemon.name) : false),
+    [pokemon, favorites]
+  );
+
+  const toggleFavorite = useCallback(
+    (name: string) => {
+      setFavorites((prev) => {
+        const next = prev.includes(name)
+          ? prev.filter((n) => n !== name)
+          : [...prev, name];
+        writeFavorites(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  /* ── Actions ── */
+  const handleRandom = useCallback(async () => {
+    const id = String(Math.floor(Math.random() * 898) + 1);
+    const data = await pokeData(id);
+    setUserInput(data.name);
   }, []);
 
+  const handleShiny = useCallback(() => {
+    if (!pokemon) return;
+    const shiny = pokemon.sprites.other?.["official-artwork"].front_shiny;
+    const def = pokemon.sprites.other?.["official-artwork"].front_default;
+    if (shiny && imgSrc !== shiny) setImgSrc(shiny);
+    else if (def && imgSrc !== def) setImgSrc(def);
+  }, [pokemon, imgSrc]);
 
-  useEffect(() => {
-    const checkIfFavorite = () => {
-      const currentFavorites = getLocalStorage(); // Fetch current favorites from local storage
-      const isFavorited = currentFavorites.some((fav: Pokemon) => fav.name === pokemon?.name);
-      setFavorite(isFavorited ? favhrt : unfavhrt);
-    };
-
-    if (pokemon) {
-      checkIfFavorite();
-    }
-  }, [pokemon, favorites]);
-
-  console.log(pokemon)
-
-  const CapitalFirstLetter = (userInput: string) => {
-    if (!userInput) return "";
-
-    let uncapped = userInput.split("-");
-    let cappedWords = uncapped.map(
-      (uncapped) => uncapped.charAt(0).toUpperCase() + uncapped.slice(1)
-    );
-    let formattedInput = cappedWords.join(" ");
-
-    return formattedInput;
-  };
-
-  const saveToLS = (pokemon: Pokemon | null) => {
-    let favorites = getLocalStorage();
-    if (pokemon && !favorites.includes(pokemon)) {
-      favorites.push(pokemon);
-      localStorage.setItem("Favorites", JSON.stringify(favorites));
-    }
-  };
-
-  const removeFromLS = (pokemon: Pokemon | null) => {
-    let favorites = getLocalStorage();
-    if (pokemon) {
-      const pokemonName = pokemon.name;
-      const namedIndex = favorites.findIndex(
-        (favPokemon: Pokemon) => favPokemon.name === pokemonName
-      );
-      if (namedIndex !== -1) {
-        favorites.splice(namedIndex, 1);
-        localStorage.setItem("Favorites", JSON.stringify(favorites));
+  const handleSearch = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        const val = (e.target as HTMLInputElement).value.trim();
+        if (val) setUserInput(val);
       }
-    }
-  };
+    },
+    []
+  );
 
-
-
-  const addFavorite = (pokemon: string) => {
-    const favorites = getLocalStorage();
-    if (!favorites.some((favPokemon: string) => favPokemon === pokemon)) {
-      const updatedFavorites = [...favorites, pokemon];
-      localStorage.setItem("Favorites", JSON.stringify(updatedFavorites));
-      setFavorites(updatedFavorites);
-    }
-  };
-
-
-
-
-  const isFavorite = pokemon == null ? false : getLocalStorage().includes(pokemon!.name);
-
-  const handleFavoriteClick = (pokenamer: string) => {
-
-    const favorites = getLocalStorage();
-    const isAlreadyFavorite = favorites.some((favPokemon: string) => favPokemon === pokenamer);
-
-    if (isAlreadyFavorite) {
-
-      removeFavorite(pokenamer);
-      setFavorite(unfavhrt);
-    } else {
-      addFavorite(pokenamer);
-
-      setFavorite(favhrt);
-    }
-    setFavorites(getLocalStorage());
-
-  };
-
-  const removeFavorite = (pokemon: string) => {
-    const favorites = getLocalStorage();
-
-    const updatedFavorites = favorites.filter((favPokemon: string) => favPokemon !== pokemon);
-    localStorage.setItem("Favorites", JSON.stringify(updatedFavorites));
-    setFavorites(updatedFavorites);
-  };
-
-
-
-  const [favClassName, setFavClassName] = useState<string>("-translate-x-full");
-  const handleFavDrawerClick = () => {
-    if (favClassName !== "-translate-x-full") {
-      setFavClassName("-translate-x-full");
-    } else {
-      setFavClassName("");
-    }
-  }
-
-
-  const genRandomNumber = async () => {
-    const randomId: string = String(Math.floor(Math.random() * 898) + 1);
-    const getName: Pokemon = await pokeData(randomId);
-    setUserInput(getName.name);
-    setImgSrc("");
-  };
-
-  const handleShinyClick = () => {
-    const shinyPic = pokemon?.sprites.other?.["official-artwork"].front_shiny;
-    const defaultPic =
-      pokemon?.sprites.other?.["official-artwork"].front_default;
-
-    if (shinyPic && imgSrc !== shinyPic) {
-      setImgSrc(shinyPic);
-    } else if (defaultPic && imgSrc !== defaultPic) {
-      setImgSrc(defaultPic);
-    }
-  };
-
-
-
-
-
-
-
-  return (
-    <div className="  bg-slate-600 m-3 md:m-8 flex justify-center">
-      <div className="mb-6">
-        <p className="text-center title text-6xl mt-4 md:text-8xl">One Dex</p>
-
-        <div className="mb-5 mt-11 flex justify-center">
-          <input
-            type="text"
-            id="searchBar"
-            placeholder="Pokemon Name/Number"
-            className="bg-gray-50 border  md:text-4xl w-60 md:w-[500px] border-gray-300 text-gray-900  rounded-lg focus:ring-blue-500 focus:border-blue-500 block  p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-            onKeyDown={(
-              e:
-                | React.KeyboardEvent<HTMLInputElement>
-                | React.ChangeEvent<HTMLInputElement>
-            ) => {
-              if (
-                (e as React.KeyboardEvent<HTMLInputElement>).key === "Enter"
-              ) {
-                setUserInput(
-                  (e as React.ChangeEvent<HTMLInputElement>).target.value
-                );
-              }
-            }}
-          />
-        </div>
-
-        <div className="flex justify-center">
-          <button
-            id="btn2"
-            type="button"
-            className="text-white bg-gradient-to-r md:text-3xl from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 shadow-lg shadow-blue-500/50 dark:shadow-lg dark:shadow-blue-800/80 font-medium rounded-lg  px-5 py-2.5 text-center me-5 md:me-11 mb-2 "
-            onClick={handleFavDrawerClick}
-          >
-            Favorites
-          </button>
-          <button
-            id="btn"
-            type="button"
-            className="text-white bg-gradient-to-r md:text-3xl  from-red-500 via-red-600 to-red-700 hover:bg-gradient-to-br focus:ring-1 focus:outline-none focus:ring-red-300 dark:focus:ring-red-800 shadow-lg shadow-red-500/50 dark:shadow-lg dark:shadow-red-800/80 font-medium rounded-lg  px-5 py-2.5 text-center me-2 mb-2"
-            onClick={genRandomNumber}
-
-          >
-            Random
-          </button>
-        </div>
-
-        <div className="flex justify-center">
-          <div className="flex">
-            <div className="">
-              <p id="pokeName" className="text-4xl md:text-5xl mt-5">
-                {pokemon && pokemon
-                  ? CapitalFirstLetter(pokemon.name)
-                  : "Bulbasaur"}
-              </p>
-            </div>
-            <div className="favEmpt ">
-              <img
-                onClick={() => handleFavoriteClick(pokemon!.name)}
-                className="h-[25px] md:h-[33px] flex ml-5 cursor-pointer"
-                src={isFavorite ? favhrt : unfavhrt}
-                alt="favorite pokemon btn"
+  /* ── Memoized stat bars ── */
+  const statBars = useMemo(() => {
+    if (!pokemon?.stats) return null;
+    return pokemon.stats.map(
+      (s: { base_stat: number; stat: { name: string } }) => {
+        const pct = Math.min((s.base_stat / 255) * 100, 100);
+        const label = STAT_LABELS[s.stat.name] || s.stat.name.toUpperCase();
+        const color = STAT_COLORS[s.stat.name] || "#818cf8";
+        return (
+          <div key={s.stat.name} className="stat-row">
+            <span className="stat-name">{label}</span>
+            <div className="stat-bar-bg">
+              <div
+                className="stat-bar-fill"
+                style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }}
               />
             </div>
+            <span className="stat-val">{s.base_stat}</span>
           </div>
-        </div>
-        <div>
-          <p className="text-center text-4xl mt-4" id="pokeNum">
-            {pokemon && pokemon.id ? `#${pokemon.id.toString().padStart(3, '0')}` : "Loading"}
-          </p>
-        </div>
-        <div className="flex justify-center">
+        );
+      }
+    );
+  }, [pokemon]);
 
-          <div className="">
-            <div id="pokeTypes" className="flex  text-4xl mt-9 justify-around">
-              {pokemon ? pokemon.types.map((type: { type: { name: string } }, index: number) => (
-                <span className="mr-2" key={index}>
-                  {CapitalFirstLetter(`${type.type.name}`)}
-                  {index !== pokemon.types.length - 1 && ', '}
+  /* ── Memoized move tags ── */
+  const moveTags = useMemo(() => {
+    if (!pokemon?.moves) return null;
+    return pokemon.moves.map(
+      (m: { move: { name: string } }, i: number) => (
+        <span key={i} className="move-tag">
+          {capitalize(m.move.name)}
+        </span>
+      )
+    );
+  }, [pokemon]);
+
+  /* ── Render ── */
+  const displayImg =
+    imgSrc ||
+    pokemon?.sprites.other?.["official-artwork"].front_default;
+
+  return (
+    <div className="pokedex-shell">
+      {/* ===== TOP BAR ===== */}
+      <div className="top-bar">
+        <p className="title">One Dex</p>
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Name or #"
+          className="search-input"
+          onKeyDown={handleSearch}
+        />
+        <div className="btn-group">
+          <button className="btn-modern btn-favorites" onClick={() => setDrawerOpen((o) => !o)}>
+            Favorites
+          </button>
+          <button className="btn-modern btn-random" onClick={handleRandom}>
+            Random
+          </button>
+          <button className="btn-modern btn-shiny" onClick={handleShiny}>
+            ✦ Shiny
+          </button>
+        </div>
+      </div>
+
+      {/* ===== MAIN GRID ===== */}
+      <div className="main-grid">
+        {/* — Left Panel — */}
+        <div className="left-panel">
+          <div className="pokemon-header">
+            <p className="poke-name">
+              {loading ? (
+                <span className="skeleton skeleton-text" style={{ width: "8rem", display: "inline-block" }}>&nbsp;</span>
+              ) : (
+                pokemon ? capitalize(pokemon.name) : "—"
+              )}
+            </p>
+            <span className="poke-id">
+              {pokemon?.id ? `#${String(pokemon.id).padStart(3, "0")}` : ""}
+            </span>
+            {pokemon && (
+              <img
+                onClick={() => toggleFavorite(pokemon.name)}
+                className="fav-heart-img"
+                src={isFavorite ? favhrt : unfavhrt}
+                alt="favorite"
+              />
+            )}
+          </div>
+
+          <div className="type-row">
+            {pokemon?.types.map(
+              (t: { type: { name: string } }, i: number) => (
+                <span key={i} className={`type-badge type-${t.type.name}`}>
+                  {t.type.name}
                 </span>
-              ))
-                : "N/A"}
+              )
+            )}
+          </div>
+
+          <div className="pokemon-image-container">
+            {loading ? (
+              <div className="skeleton skeleton-img" />
+            ) : (
+              displayImg && (
+                <img
+                  key={displayImg}
+                  src={displayImg}
+                  onClick={handleShiny}
+                  alt={pokemon?.name || "Pokemon"}
+                />
+              )
+            )}
+          </div>
+
+          {/* Evolution Chain */}
+          <div className="evo-section">
+            <p className="info-label">Evolution Chain</p>
+            <div className="evo-chain">
+              {evolutionDatas.length > 0
+                ? evolutionDatas.map((evo, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span className="evo-arrow">→</span>}
+                      <div
+                        className="evo-item"
+                        onClick={() => setUserInput(pokemonEvoData[i])}
+                      >
+                        <img
+                          className="evo-img"
+                          src={evo.evolutionImage}
+                          alt={pokemonEvoData[i]}
+                          loading="lazy"
+                        />
+                        <span className="evo-name">
+                          {capitalize(pokemonEvoData[i])}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  ))
+                : pokemonEvoData.map((name, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span className="evo-arrow">→</span>}
+                      <span className="evo-name-tag">{capitalize(name)}</span>
+                    </React.Fragment>
+                  ))}
             </div>
           </div>
         </div>
 
-
-        <div className="flex justify-center">
-          <img
-            className="w-[475px]"
-            id="pokeImg"
-            src={
-              imgSrc ||
-              pokemon?.sprites.other?.["official-artwork"].front_default
-            }
-            onClick={handleShinyClick}
-            alt="A pokemon"
-          />
-        </div>
-
-        <div className="max-w-[600px] px-5">
-          <p className="outlined decoration-white decoration-2 underline text-center text-6xl text-white">
-            Evolutions
-          </p>
-          <div
-            id="evoPath"
-            className="text-center text-[40px] text-white outlined2 pb-1"
-          >
-            {evolutionDatas.map(({ evolutionImage, evolutionId }, index) => (
-              <div key={index}>
-                <p className="  text-center text-white">
-                  {CapitalFirstLetter(pokemonEvoData[index])}
-                </p>
-              </div>
-            ))}
-          </div>
-          <hr className="breakers" />
-          <div className="flex text-white outlined2 text-3xl md:text-5xl mb-5 mt-4 ">
-            <p className="mr-5">Location:</p>
-            <p className=" overflow-scroll max-h-[100px]">
+        {/* — Right Panel — */}
+        <div className="right-panel">
+          {/* Location */}
+          <div className="info-section">
+            <p className="info-label">Location</p>
+            <div className="info-content info-scroll">
               {location && Array.isArray(location) && location.length > 0
-                ? location.map(
-                  (
-                    locationItem: { location_area: { name: string } },
-                    index: number
-                  ) => (
-                    <span key={index}>
-                      {CapitalFirstLetter(
-                        `${locationItem.location_area.name}`
-                      )}
-                      {index !== location.length - 1 && ", "}
-                    </span>
+                ? (location as any[]).map(
+                    (loc: { location_area: { name: string } }, i: number) => (
+                      <span key={i}>
+                        {capitalize(loc.location_area.name)}
+                        {i !== (location as any[]).length - 1 && ", "}
+                      </span>
+                    )
                   )
-                )
                 : "Location Unknown"}
-            </p>
+            </div>
           </div>
-          <hr className="breakers" />
-          <div className="flex text-white outlined2 text-3xl md:text-5xl my-4">
-            <p className="mr-5">Abilities:</p>
-            <p>
 
+          {/* Abilities */}
+          <div className="info-section">
+            <p className="info-label">Abilities</p>
+            <div className="info-content">
               {pokemon?.abilities.map(
-                (ability: { ability: { name: string } }, index: number) => (
-                  <span key={index}>
-                    {CapitalFirstLetter(`${ability.ability.name}`)}
-                    {index !== pokemon.abilities.length - 1 && ", "}
+                (a: { ability: { name: string } }, i: number) => (
+                  <span key={i}>
+                    {capitalize(a.ability.name)}
+                    {i !== pokemon.abilities.length - 1 && ", "}
                   </span>
                 )
               )}
-            </p>
+            </div>
           </div>
-          <hr className="breakers" />
-          <div className="flex text-white outlined2 text-3xl md:text-5xl mt-4 ">
-            <p className="mr-5">Moves:</p>
-            <p className="overflow-scroll max-h-[187px]">
-              {pokemon?.moves.map(
-                (move: { move: { name: string } }, index: number) => (
-                  <span key={index}>
-                    {CapitalFirstLetter(`${move.move.name}`)}
-                    {index !== pokemon.moves.length - 1 && ", "}
-                  </span>
-                )
-              )}
-            </p>
+
+          {/* Base Stats */}
+          <div className="info-section stats-section">
+            <p className="info-label">Base Stats</p>
+            <div className="stats-grid">{statBars}</div>
+          </div>
+
+          {/* Moves */}
+          <div className="info-section moves-section">
+            <p className="info-label">Moves</p>
+            <div className="info-content moves-content">
+              <div className="moves-grid">{moveTags}</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div id="drawer-navigation" className={`fixed top-0 bg-[#D9D9D9] left-0 z-40 w-full lg:w-[420px] h-screen p-4 overflow-y-auto transition-transform dark:bg-gray-800 ${favClassName}`}>
-        <p id="drawer-navigation-label" className=" text-[2.8rem] ">Favorites</p>
-        <button onClick={handleFavDrawerClick} type="button" className=" bg-transparent  hover:text-gray-500 absolute top-6 end-2.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white">
-          <svg aria-hidden="true" className="w-[50px] h-[50px] grid" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path></svg>
-        </button>
-        <div className="py-4 overflow-y-auto ">
-          <div id="getFavoritesDiv">
-            {favorites.map((pokemonName: string, index: number) => (
-              <div key={index} className="flex justify-between flex-row">
-                <p className=" text-black  text-[32px] w-full rounded-l-lg px-2 cursor-pointer" onClick={() => setUserInput(pokemonName)}>
-                  <span>{`${CapitalFirstLetter(pokemonName)}`}</span>
-                </p>
-                <button className=" text-[32px]  hover:text-gray-500 px-5 h-full" onClick={() => handleFavoriteClick(pokemonName)}  >
-                  {"X"}
-                </button>
-              </div>
-            ))}
+      {/* ===== DRAWER OVERLAY ===== */}
+      <div
+        className={`drawer-overlay ${drawerOpen ? "visible" : ""}`}
+        onClick={() => setDrawerOpen(false)}
+      />
 
-
-          </div>
+      {/* ===== FAVORITES DRAWER ===== */}
+      <div className={`drawer-panel ${drawerOpen ? "open" : ""}`}>
+        <div className="drawer-header">
+          <p className="drawer-title">Favorites</p>
+          <button
+            onClick={() => setDrawerOpen(false)}
+            className="fav-remove-btn"
+          >
+            ✕
+          </button>
         </div>
-
-
+        <div>
+          {favorites.map((name, i) => (
+            <div key={i} className="fav-item">
+              <span
+                className="fav-item-name"
+                onClick={() => {
+                  setUserInput(name);
+                  setDrawerOpen(false);
+                }}
+              >
+                {capitalize(name)}
+              </span>
+              <button
+                className="fav-remove-btn"
+                onClick={() => toggleFavorite(name)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {favorites.length === 0 && (
+            <p className="fav-empty">No favorites yet</p>
+          )}
+        </div>
       </div>
-
-
     </div>
   );
 };

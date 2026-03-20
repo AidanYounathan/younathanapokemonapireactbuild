@@ -1,6 +1,4 @@
 import React from 'react';
-import logo from './logo.svg';
-import './Components/PokedexComponent.css'
 import './App.css';
 import PokedexComponent from './Components/PokedexComponent';
 
